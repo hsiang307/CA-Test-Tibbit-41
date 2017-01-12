@@ -1,0 +1,92 @@
+include "global.tbh"
+
+'This is the list of test cases available in this application
+enum test_modes
+	TEST_BIT_OUT,
+	TEST_BYTE_OUT,
+	TEST_BYTE_IN
+end enum
+
+declare function print_bin(dt as byte) as string
+declare function print_hex(dt as byte) as string
+
+'====================================================================
+sub on_sys_init()
+	dim line,dt as byte
+	dim carry as byte
+	dim test_item as test_modes
+	
+	select case tbt41_init(YES)
+	case TBT41_SELF_TEST_FAIL:
+		sys.debugprint("TBT41 self test failed!"+CR_LF)
+		sys.halt()
+
+	case TBT41_NO_SSI_AVAILABLE:
+		sys.debugprint("SSI channel could not be allocated, using bit banging instead."+CR_LF)
+
+	end select
+
+	test_item=TEST_BYTE_IN  '<<====================================== SELECT DESIRED TEST CASE HERE
+
+	select case test_item
+	case TEST_BIT_OUT:
+		'This test shows bit-level (line-level) control.
+		'The code implements a counter, so 8 outputs lines increment from &h00 to &hFF and roll over.
+				
+		sys.debugprint("Test bit access ..."+CR_LF)
+		
+		'configure each line as output
+		for line=EXT_LINE_1 to EXT_LINE_8
+			tbt41_line_out_enable(line,YES)	
+		next line
+
+		while 1
+			carry=1
+			for line=EXT_LINE_1 to EXT_LINE_8
+				if carry=1 then
+					tbt41_line_get(line,dt)
+					if dt=0 then
+						dt=1
+						carry=0
+					else	
+						dt=0
+						carry=1
+					end if
+					tbt41_line_set(line,dt)
+				end if
+			next line
+		wend
+
+	case TEST_BYTE_OUT:
+		'This test shows byte-level (port-level) control.
+		'The code implements a counter, so 8 outputs lines increment from &h00 to &hFF and roll over.
+		
+		tbt41_port_config_set(&h00,&hFF)	'all lines as outputs, pull-up resistors enabled	
+		sys.debugprint("Test byte access ..."+CR_LF)
+
+		while 1
+			tbt41_port_get(dt)
+			tbt41_port_set(dt+1)
+		wend
+
+	case TEST_BYTE_IN:
+		'This code reads the entire port and prints the value
+		tbt41_port_config_set(&hFF,&hFF)	'all lines as outputs, pull up resistors enabled
+		
+		while 1
+			tbt41_port_get(dt)
+			sys.debugprint(print_bin(dt)+" "+print_hex(dt)+CR_LF)
+		wend
+
+	end select
+end sub
+
+function print_bin(dt as byte) as string
+	print_bin=mid(bin(dt),3,255)
+	print_bin="&b"+strgen(8-len(print_bin),"0")+print_bin
+end function
+
+function print_hex(dt as byte) as string
+	print_hex=mid(hex(dt),3,255)
+	print_hex="&h"+strgen(2-len(print_hex),"0")+print_hex
+end function
